@@ -727,6 +727,110 @@ app.route('/analytics')
 
     });
 
+
+getUserApps = (uid) => {
+    return new Promise((resolve, reject) => {
+        var sql = "SELECT distinct(app_id),app_name FROM app NATURAL JOIN \
+                    transaction WHERE user_id = ?";
+        db.query(sql, [uid], async (error, results) => {
+            resolve(results);
+        })
+    });
+}
+
+uninstallApp = (uid, did, aid) => {
+    return new Promise((resolve, reject) => {
+        var sql = "DELETE FROM transaction WHERE user_id = ? AND app_id = ? AND device_id = ?";
+        db.query(sql, [uid, aid, did], async (error, results) => {
+            if (error) reject("Error while uninstalling, check details and try again");
+            resolve("App Uninstalled Successfully!");
+        })
+    });
+}
+
+changeVersion = (uid, did, aid, ver) => {
+    return new Promise((resolve, reject) => {
+        var vstr = '';
+        if (ver == 1) vstr = 'version_1_link';
+        else if (ver == 2) vstr = 'version_2_link';
+        else if (ver == 3) vstr = 'version_3_link';
+
+        var sql = "update transaction \
+                    set version_link=(select "+ vstr + " from app where app_id = ?) \
+                    WHERE app_id = ? AND device_id = ? AND user_id = ?;"
+
+        db.query(sql, [aid, aid, did, uid], async (error, results) => {
+            if (error) reject("Error while rolling to new version, check details and try again");
+            resolve("Version changed Successfully!");
+        })
+    });
+}
+
+
+
+app.route('/manage')
+    .get((req, res) => {
+        var uid = req.session.user.user_id;
+        getUserApps(uid)
+            .then((aps) => {
+                getUserDevices(uid)
+                    .then((devcs) => {
+                        res.render('manage', { aps, devcs })
+                    }).catch((err) => {
+                        res.render('manage', { message: "Some error occured, try again!" })
+                    })
+            }).catch((err) => {
+                res.render('manage', { message: "Some error occured, try again!" })
+            })
+    }).post((req, res) => {
+        var uid = req.session.user.user_id;
+        var did = req.body.userDevices;
+        var aid = req.body.userApps;
+        var user_choice = req.body.userAction;
+
+        getUserApps(uid)
+            .then((aps) => {
+                getUserDevices(uid)
+                    .then((devcs) => {
+                        if (user_choice == "useVersion1") {
+                            changeVersion(uid, did, aid, 1)
+                                .then((msg) => {
+                                    res.render('manage', { aps, devcs, message: msg })
+                                }).catch((err) => {
+                                    res.render('manage', { aps, devcs, message: err })
+                                })
+                        } else if (user_choice == "useVersion2") {
+                            changeVersion(uid, did, aid, 2)
+                                .then((msg) => {
+                                    res.render('manage', { aps, devcs, message: msg })
+                                }).catch((err) => {
+                                    res.render('manage', { aps, devcs, message: err })
+                                })
+                        } else if (user_choice == "useVersion3") {
+                            changeVersion(uid, did, aid, 3)
+                                .then((msg) => {
+                                    res.render('manage', { aps, devcs, message: msg })
+                                }).catch((err) => {
+                                    res.render('manage', { aps, devcs, message: err })
+                                })
+                        } else if (user_choice == "uninstall") {
+                            uninstallApp(uid, did, aid)
+                                .then((msg) => {
+                                    res.render('manage', { aps, devcs, message: msg })
+                                }).catch((err) => {
+                                    res.render('manage', { aps, devcs, message: err })
+                                })
+                        }
+                    }).catch((err) => {
+                        res.render('manage', { message: "Some error occured, try again!" })
+                    })
+            }).catch((err) => {
+                res.render('manage', { message: "Some error occured, try again!" })
+            })
+
+
+    });
+
 app.use(function (req, res, next) {
     res.status(404).send("Sorry can't find that!")
 });
