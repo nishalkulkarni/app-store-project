@@ -491,11 +491,258 @@ app.route('/transaction')
 
     });
 
+
+
+var devloginFunction = (email, password) => {
+    return new Promise((resolve, reject) => {
+        db.query('SELECT * FROM developer WHERE dev_email = ?', [email], async (error, results) => {
+            if (results.length == 0 || !(await password === results[0].dev_password)) {
+                reject('Email or Password is incorrect');
+            } else {
+                resolve(results[0]);
+            }
+        })
+    });
+}
+
+app.route('/devlogin')
+    .get(sessionChecker, (req, res) => {
+        res.render('devlogin');
+    })
+    .post((req, res) => {
+        try {
+            var email = req.body.email;
+            var password = req.body.password;
+
+            if (!email || !password) {
+                return res.status(400).render('devlogin', {
+                    message: 'Please provide valid email and password'
+                })
+            }
+
+            devloginFunction(email, password)
+                .then((results) => {
+                    req.session.user = results;
+                    res.redirect('/devdashboard')
+                }).catch((error) => {
+                    return res.render('devlogin', {
+                        message: error
+                    })
+                })
+        } catch (error) {
+            console.log(error)
+        }
+
+    });
+
+var publishApp = (appname, did, description, cost, paylink, v1link, v2link, v3link) => {
+    return new Promise((resolve, reject) => {
+        db.query('SELECT app_id FROM app;', async (error, results) => {
+            if (error) console.log(error);
+            else {
+                var aids = [];
+                results.forEach(element => {
+                    aids.push(element.app_id);
+                });
+
+                let i = 101;
+                while (aids.includes('APP' + i)) {
+                    i += 1;
+                }
+                let newaid = 'APP' + i;
+                var dop = new Date().toISOString().slice(0, 19).replace('T', ' ');
+                var lu = dop;
+                let params = {
+                    app_id: newaid,
+                    dev_id: did,
+                    app_name: appname,
+                    description: description,
+                    cost: cost,
+                    payment_link: paylink,
+                    date_of_publishing: dop,
+                    last_updated: lu,
+                    version_1_link: v1link,
+                    version_2_link: v2link,
+                    version_3_link: v3link
+                };
+                db.query('INSERT INTO app SET ? ', params, (error, re) => {
+                    if (error) {
+                        reject("Error whiile publishing app.")
+                    } else {
+                        resolve("App published Successfully")
+                    }
+                });
+            }
+        });
+    });
+}
+
+var addSupportList = (appname, supplats) => {
+    return new Promise((resolve, reject) => {
+        db.query('SELECT app_id FROM app WHERE app_name = ?', [appname], async (error, results) => {
+            if (error) console.log(error);
+            else {
+                let aid = results[0].app_id;
+                let params = []
+                supplats.forEach((element) => {
+                    params.push([aid, element]);
+
+                });
+                console.log(params);
+
+                db.query('INSERT INTO supported_platforms (app_id, os) VALUES ? ', [params], (error, re) => {
+                    if (error) {
+                        reject("Error whiile publishing app.")
+                    } else {
+                        resolve("App published and added supported platforms successfully")
+                    }
+                });
+            }
+        });
+    });
+}
+
+app.route('/devdashboard')
+    .get((req, res) => {
+        if (req.session.user && req.cookies.user_sid) {
+            res.render('devdashboard')
+        } else {
+            res.redirect('/devlogin');
+        }
+    }).post((req, res) => {
+        var appname = req.body.appname;
+        var did = req.session.user.dev_id;
+        var description = req.body.description;
+        var cost = req.body.cost;
+        var paylink = req.body.paylink;
+        var v1link = req.body.v1link;
+        var v2link = req.body.v2link;
+        var v3link = req.body.v3link;
+        var supplats = req.body.supplat.split(',');
+
+        publishApp(appname, did, description, cost, paylink, v1link, v2link, v3link)
+            .then((msg) => {
+                addSupportList(appname, supplats)
+                    .then((misg) => {
+                        res.render('devdashboard', {
+                            message: misg
+                        })
+                    }).catch((erro) => {
+                        res.render('devdashboard', {
+                            message: msg
+                        })
+
+                    })
+            }).catch((err) => {
+                res.render('devdashboard', {
+                    message: err
+                })
+            })
+    });
+
+getDevApps = (did) => {
+    return new Promise((resolve, reject) => {
+        var sql = "SELECT app_id,app_name \
+                 FROM app WHERE dev_id = ?";
+        db.query(sql, [did], async (error, results) => {
+            resolve(results);
+        })
+    });
+}
+
+getGeoReach = (aid) => {
+    return new Promise((resolve, reject) => {
+        var sql = "select address from users NATURAL JOIN transaction \
+                    natural join app WHERE app_id = ?;";
+        db.query(sql, [aid], async (error, results) => {
+            resolve(results);
+        })
+    });
+}
+
+getDeviceReach = (aid) => {
+    return new Promise((resolve, reject) => {
+        var sql = "select os from devices natural join users NATURAL JOIN \
+         transaction natural join app WHERE app_id = ?;";
+        db.query(sql, [aid], async (error, results) => {
+            resolve(results);
+        })
+    });
+}
+
+getInstallCount = (aid) => {
+    return new Promise((resolve, reject) => {
+        var sql = "select app_name,count(*) total_installs from \
+                            transaction natural join app where app_id = ?;";
+        db.query(sql, [aid], async (error, results) => {
+            resolve(results);
+        })
+    });
+}
+
+app.route('/analytics')
+    .get((req, res) => {
+        if (req.session.user && req.cookies.user_sid) {
+            var did = req.session.user.dev_id;
+            getDevApps(did)
+                .then((aps) => {
+                    res.render('analytics', { aps })
+                }).catch((err) => {
+                    res.render('analytics', {
+                        message: err
+                    })
+                })
+        } else {
+            res.redirect('/devlogin');
+        }
+    }).post((req, res) => {
+        var aid = req.body.devApps;
+        var did = req.session.user.dev_id;
+        getDevApps(did)
+            .then((aps) => {
+
+                getInstallCount(aid)
+                    .then((icounts) => {
+                        console.log(icounts)
+                        getFeedback(aid)
+                            .then((feeds) => {
+                                getGeoReach(aid)
+                                    .then((georeach) => {
+                                        getDeviceReach(aid)
+                                            .then((devicereach) => {
+                                                res.render('analytics', { feeds, aps, georeach, devicereach, icounts })
+                                            }).catch((err) => {
+                                                res.render('analytics', { aps, feeds, georeach, icounts })
+                                            })
+                                    }).catch((err) => {
+                                        res.render('analytics', { aps, feeds, icounts })
+                                    })
+                            }).catch((err) => {
+                                res.render('analytics', { aps, icounts })
+                            })
+
+                    }).catch((euro) => {
+                        res.render('analytics', { aps })
+                    })
+            }).catch((err) => {
+                res.render('analytics', {
+                    apna: err
+                })
+            })
+
+
+    });
+
 app.use(function (req, res, next) {
     res.status(404).send("Sorry can't find that!")
 });
 
 app.listen(2678, () => console.log('Server started at http://localhost:2678'))
 
+// User
 // pmallia2@mysql.com
 // FRqEM9R1
+
+// Developer
+// mmorten3@Bluejam.com
+// VksMPzVu6AO3
