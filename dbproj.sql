@@ -40,7 +40,7 @@ CREATE TABLE transaction (
     user_id CHAR(6),
     app_id CHAR(6),
     device_id CHAR(6),
-    version_link VARCHAR(50) NOT NULL,
+    version_link VARCHAR(100) NOT NULL,
     installed CHAR(3) NOT NULL,
     CONSTRAINT pk_user_app_device primary key (user_id, app_id, device_id),
     CONSTRAINT fk_transaction_user foreign key (user_id) references users(user_id),

@@ -1,10 +1,9 @@
 const express = require('express');
-var session = require('express-session');
+const session = require('express-session');
 const path = require('path');
 const mysql = require('mysql');
 const cookieParser = require('cookie-parser');
 const app = express();
-
 
 const db = mysql.createConnection({
     host: "localhost",
@@ -287,13 +286,32 @@ var addDevice = (uid, os) => {
     });
 }
 
+var getInstalledApp = (did) => {
+    return new Promise((resolve, reject) => {
+        var sql = "SELECT app_name \
+         FROM transaction NATURAL JOIN app WHERE device_id = ?";
+        db.query(sql, [did], async (error, results) => {
+            resolve(results);
+        })
+    });
+}
+
 app.route('/devices')
     .get((req, res) => {
         var uid = req.session.user.user_id;
         devicesFunction(uid)
-            .then((results) => {
-                console.log(results)
-                return res.render('devices', { results })
+            .then((devcs) => {
+                devcs.forEach((element) => {
+                    getInstalledApp(element.device_id)
+                        .then((aps) => {
+                            var instapps = [];
+                            aps.forEach((ap) => {
+                                instapps.push(ap.app_name)
+                            });
+                            element["installed_apps"] = instapps
+                        })
+                });
+                return res.render('devices', { devcs })
             }).catch((error) => {
                 return res.render('devices', { error })
             })

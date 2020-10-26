@@ -28,7 +28,7 @@
                     <a class="nav-link" href="/">Home</a>
                 </li>
                 <li class="nav-item active">
-                    <a class="nav-link" href="devices">Devices <span class="sr-only">(current)</span></a>
+                    <a class="nav-link" href="devices">Devices/Apps <span class="sr-only">(current)</span></a>
                 </li>
                 <li class="nav-item">
                     <a class="nav-link" href="rankings">Rankings</a>
@@ -42,11 +42,17 @@
 
     <div class="container" style="margin-top: 2em; min-width: 75%;" id="mainContainer">
 
-        {{#each results}}
+        {{#each devcs}}
         <div class="card mt-4">
             <div class="card-body">
                 <h5 class="card-title">{{this.device_id}}</h5>
                 <p class="card-text">{{this.os}}</p>
+                <strong>Installed Apps</strong>
+                <ul>
+                    {{#each installed_apps}}
+                    <li>{{this}}</li>
+                    {{/each}}
+                </ul>
             </div>
         </div>
         {{/each}}
@@ -54,13 +60,13 @@
         <div class="card mt-4">
             <div class="card-body">
                 <h4 class="card-title">Add a new device</h4>
-            <form action="/devices" method="POST">
-                <div class="form-group">
-                    <label for="os">Operating System</label>
-                    <input type="text" class="form-control" id="os" name="os">
-                </div>
-                <button type="submit" class="btn btn-primary">Add device</button>
-            </form>
+                <form action="/devices" method="POST">
+                    <div class="form-group">
+                        <label for="os">Operating System</label>
+                        <input type="text" class="form-control" id="os" name="os">
+                    </div>
+                    <button type="submit" class="btn btn-primary">Add device</button>
+                </form>
             </div>
         </div>
     </div>
