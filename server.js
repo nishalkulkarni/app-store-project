@@ -3,7 +3,6 @@ var session = require('express-session');
 const path = require('path');
 const mysql = require('mysql');
 const cookieParser = require('cookie-parser');
-var bodyParser = require('body-parser');
 const app = express();
 
 
@@ -14,6 +13,10 @@ const db = mysql.createConnection({
     database: "softstore"
 });
 
+db.connect(function (err) {
+    if (err) throw err;
+    console.log("MySQL Connected!");
+});
 
 app.use('/', express.static(path.join(__dirname, 'public')))
 
@@ -177,18 +180,40 @@ var dashboardFunction = () => {
     });
 }
 
-app.get('/dashboard', (req, res) => {
-    if (req.session.user && req.cookies.user_sid) {
-        dashboardFunction()
+var dashboardSearch = (appName) => {
+    return new Promise((resolve, reject) => {
+        var sql = "SELECT app_id FROM app WHERE app_name = ?"
+        db.query(sql, [appName], async (error, results) => {
+            if (results.length == 0) {
+                reject(error);
+            } else {
+                resolve(results);
+            }
+        })
+    });
+}
+
+app.route('/dashboard')
+    .get((req, res) => {
+        if (req.session.user && req.cookies.user_sid) {
+            dashboardFunction()
+                .then((results) => {
+                    return res.render('dashboard', { results })
+                }).catch((error) => {
+                    return res.render('dashboard', { error })
+                })
+        } else {
+            res.redirect('/login');
+        }
+    }).post((req, res) => {
+        var appName = req.body.search;
+        dashboardSearch(appName)
             .then((results) => {
-                return res.render('dashboard', { results })
+                res.redirect('/app/' + results[0].app_id);
             }).catch((error) => {
-                return res.render('dashboard', { error })
+                res.redirect('dashboard');
             })
-    } else {
-        res.redirect('/login');
-    }
-});
+    });
 
 var rankingsFunction = () => {
     return new Promise((resolve, reject) => {
@@ -294,10 +319,48 @@ app.route('/devices')
 var getAppInfo = (aid) => {
     return new Promise((resolve, reject) => {
         var sql = "SELECT * \
-             FROM app NATURAL JOIN developer NATURAL JOIN supported_platforms WHERE app_id = ?";
+             FROM app NATURAL JOIN developer WHERE app_id = ?";
         db.query(sql, [aid], async (error, results) => {
             if (results.length == 0) {
                 reject('App not found');
+            } else {
+                resolve(results);
+            }
+        })
+    });
+}
+
+getUserDevices = (uid) => {
+    return new Promise((resolve, reject) => {
+        var sql = "SELECT * \
+             FROM devices WHERE user_id = ?";
+        db.query(sql, [uid], async (error, results) => {
+            resolve(results);
+        })
+    });
+}
+
+var getSupportedPlatforms = (aid) => {
+    return new Promise((resolve, reject) => {
+        var sql = "SELECT os \
+             FROM supported_platforms WHERE app_id = ?";
+        db.query(sql, [aid], async (error, results) => {
+            if (results.length == 0) {
+                reject('Supported platforms not found');
+            } else {
+                resolve(results);
+            }
+        })
+    });
+}
+
+var getFeedback = (aid) => {
+    return new Promise((resolve, reject) => {
+        var sql = "SELECT * \
+             FROM feedback WHERE app_id = ?";
+        db.query(sql, [aid], async (error, results) => {
+            if (results.length == 0) {
+                reject('No feedbacks given');
             } else {
                 resolve(results);
             }
@@ -320,13 +383,34 @@ var sendFeedback = (aid, uid, rating, review) => {
 
 app.route('/app/app*')
     .get((req, res) => {
-        var aid = req.url.substring(5)
-        console.log(aid)
-        // res.render('app');
+        var aid = req.url.substring(5);
+        var uid = req.session.user.user_id;
         getAppInfo(aid)
-            .then((results) => {
-                console.log(results)
-                return res.render('app', { results })
+            .then((appInfo) => {
+                getUserDevices(uid)
+                    .then((devcs) => {
+                        console.log(appInfo, devcs)
+                        var devis = [];
+                        devcs.forEach(element => {
+                            devis.push([element.os, element.device_id]);
+                        });
+                        appInfo[0]['user_devices'] = devis;
+                        console.log(devis, appInfo);
+
+                        getSupportedPlatforms(aid)
+                            .then((sup_plat) => {
+                                getFeedback(aid)
+                                    .then((feeds) => {
+                                        return res.render('app', { appInfo, sup_plat, feeds })
+                                    }).catch((error) => {
+                                        return res.render('app', { appInfo, sup_plat })
+                                    })
+                            }).catch((error) => {
+                                return res.render('app', { appInfo })
+                            })
+                    }).catch((error) => {
+                        return res.render('app', { appInfo })
+                    })
             }).catch((error) => {
                 return res.render('app', { error })
             })
@@ -341,9 +425,9 @@ app.route('/app/app*')
                 getAppInfo(aid)
                     .then((rei) => {
                         console.log(rei)
-                        return res.render('app', { message: "Feedback sent successfully!" })
+                        return res.redirect(aid)
                     }).catch((error) => {
-                        return res.render('app', { error })
+                        return res.redirect(aid)
                     })
             }).catch((error) => {
                 return res.render('app', { error })
@@ -352,21 +436,46 @@ app.route('/app/app*')
     });
 
 
+var performInstallation = (aid, uid, did, vlink) => {
+    return new Promise((resolve, reject) => {
+        var sql = "INSERT INTO transaction SET ? ";
+        let params = { user_id: uid, app_id: aid, device_id: did, version_link: vlink, installed: 'YES' };
+        db.query(sql, params, async (error, results) => {
+            if (results.length == 0) {
+                reject('Error while performing transaction please try again');
+            } else {
+                resolve('Transaction performed successfully');
+            }
+        })
+    });
+}
+
+app.route('/transaction')
+    .get((req, res) => {
+        res.redirect("dashboard");
+    }).post((req, res) => {
+        var aid = req.body.apid;
+        var uid = req.session.user.user_id;
+        var vlink = req.body.versions;
+        var did = req.body.userDevices;
+        console.log(aid, uid, vlink, did);
+
+        performInstallation(aid, uid, did, vlink)
+            .then((msg) => {
+                res.render('transaction', {
+                    message: msg
+                })
+            }).catch((err) => {
+                res.render('transaction', {
+                    message: err
+                })
+            })
+
+    });
+
 app.use(function (req, res, next) {
     res.status(404).send("Sorry can't find that!")
 });
-
-
-db.connect(function (err) {
-    if (err) throw err;
-    console.log("MySQL Connected!");
-    db.query("select app_name from app;", function (err, result, fields) {
-        if (err) throw err;
-        // console.log("Result: " + JSON.stringify(result));
-    });
-});
-
-
 
 app.listen(2678, () => console.log('Server started at http://localhost:2678'))
 
