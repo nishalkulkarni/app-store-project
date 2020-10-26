@@ -407,13 +407,11 @@ app.route('/app/app*')
             .then((appInfo) => {
                 getUserDevices(uid)
                     .then((devcs) => {
-                        console.log(appInfo, devcs)
                         var devis = [];
                         devcs.forEach(element => {
                             devis.push([element.os, element.device_id]);
                         });
                         appInfo[0]['user_devices'] = devis;
-                        console.log(devis, appInfo);
 
                         getSupportedPlatforms(aid)
                             .then((sup_plat) => {
@@ -442,7 +440,6 @@ app.route('/app/app*')
             .then((results) => {
                 getAppInfo(aid)
                     .then((rei) => {
-                        console.log(rei)
                         return res.redirect(aid)
                     }).catch((error) => {
                         return res.redirect(aid)
@@ -476,7 +473,6 @@ app.route('/transaction')
         var uid = req.session.user.user_id;
         var vlink = req.body.versions;
         var did = req.body.userDevices;
-        console.log(aid, uid, vlink, did);
 
         performInstallation(aid, uid, did, vlink)
             .then((msg) => {
@@ -588,7 +584,6 @@ var addSupportList = (appname, supplats) => {
                     params.push([aid, element]);
 
                 });
-                console.log(params);
 
                 db.query('INSERT INTO supported_platforms (app_id, os) VALUES ? ', [params], (error, re) => {
                     if (error) {
@@ -703,7 +698,6 @@ app.route('/analytics')
 
                 getInstallCount(aid)
                     .then((icounts) => {
-                        console.log(icounts)
                         getFeedback(aid)
                             .then((feeds) => {
                                 getGeoReach(aid)
