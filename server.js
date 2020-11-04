@@ -767,7 +767,6 @@ changeVersion = (uid, did, aid, ver) => {
 }
 
 
-
 app.route('/manage')
     .get((req, res) => {
         var uid = req.session.user.user_id;
@@ -838,9 +837,9 @@ app.use(function (req, res, next) {
 app.listen(2678, () => console.log('Server started at http://localhost:2678'))
 
 // User
-// pmallia2@mysql.com
-// FRqEM9R1
+// a@b.com
+// 123
 
 // Developer
 // mmorten3@Bluejam.com
-// VksMPzVu6AO3
+// 123

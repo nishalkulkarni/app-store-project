@@ -804,3 +804,17 @@ FROM app
     ) AS top
     ORDER BY installs DESC;
 
+
+delimiter // 
+CREATE TRIGGER addDev 
+AFTER INSERT ON users 
+FOR EACH ROW 
+BEGIN
+    DECLARE devid CHAR(6);
+    DECLARE devname VARCHAR(50);
+
+    select concat('DEV',right(user_id,3)) into devid from users WHERE user_id=NEW.user_id;
+    select substring_index(email,'@',1) into devname from users WHERE user_id=NEW.user_id;
+
+    insert into developer(dev_id,dev_email,dev_password,dev_name) VALUES (devid,NEW.email,NEW.password,devname);
+END; //
